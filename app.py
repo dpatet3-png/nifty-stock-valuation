@@ -41,7 +41,9 @@ if st.button("Analizza Azione", type="primary"):
             else:
                 current_price = info.get('currentPrice', info.get('regularMarketPrice', np.nan))
                 trailing_pe = info.get('trailingPE', np.nan)
+                company_sector = info.get('sector', 'Unknown')
                 
+                # 1. Raccolta di TUTTE le metriche richieste dal modello (incluso il Free Cash Flow)
                 data = {
                     'ROE': info.get('returnOnEquity', np.nan),
                     'ROA': info.get('returnOnAssets', np.nan),
@@ -50,11 +52,30 @@ if st.button("Analizza Azione", type="primary"):
                     'Revenue_Growth': info.get('revenueGrowth', np.nan),
                     'Earnings_Growth': info.get('earningsGrowth', np.nan),
                     'Debt_To_Equity': info.get('debtToEquity', np.nan),
-                    'Current_Ratio': info.get('currentRatio', np.nan)
+                    'Current_Ratio': info.get('currentRatio', np.nan),
+                    'Free_Cash_Flow': info.get('freeCashflow', np.nan)
                 }
                 
-                df_input = pd.DataFrame([data]).fillna(0)
-                predicted_fair_pe = model.predict(df_input[feature_cols])[0]
+                # 2. Creazione del DataFrame di input
+                df_input = pd.DataFrame([data])
+                
+                # 3. One-Hot Encoding del settore corrente
+                sector_col_name = f"Sector_{company_sector}"
+                if sector_col_name in feature_cols:
+                    df_input[sector_col_name] = 1
+                
+                # 4. Riempimento dei valori mancanti con 0
+                df_input = df_input.fillna(0)
+                
+                # 5. Allineamento rigoroso: forza l'esistenza di tutte le feature attese dal modello
+                for col in feature_cols:
+                    if col not in df_input.columns:
+                        df_input[col] = 0
+                
+                X_pred = df_input[feature_cols]
+                
+                # 6. Predizione del Fair P/E con la Random Forest
+                predicted_fair_pe = model.predict(X_pred)[0]
                 
                 if pd.isna(trailing_pe) or trailing_pe <= 0:
                     st.warning(f"Trailing P/E non disponibile o negativo. Fair P/E stimato: **{predicted_fair_pe:.2f}**")
@@ -64,7 +85,7 @@ if st.button("Analizza Azione", type="primary"):
                     
                     st.divider()
                     st.subheader(f"🏢 {info.get('shortName', ticker_symbol)}")
-                    st.caption(f"Settore: {info.get('sector', 'N/A')} | Industria: {info.get('industry', 'N/A')}")
+                    st.caption(f"Settore: {company_sector} | Industria: {info.get('industry', 'N/A')}")
                     
                     # Visualizzazione delle metriche principali in colonne
                     col1, col2, col3 = st.columns(3)
